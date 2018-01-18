@@ -1,6 +1,8 @@
 import heapq
 import operator
 import os
+from bitstring import BitArray
+import json
 class Node:
     #build a class node with sympol, frequency, left node, right node
     def __init__(self,sympol=None,frequency=None,left_node=None,right_node=None):
@@ -52,23 +54,27 @@ def convert_text_to_code(encoded_sympol,content):
     encoded_content = ""
     for sym in content:
         encoded_content = encoded_content + encoded_sympol[sym]
+    #print (encoded_content)
     return encoded_content
 def prepare_to_convert_bin_to_byte(content):
     added_code = 8 - len(content) % 8
+    #print (added_code)
     for i in range(added_code):
-        content = content + "0"
+        content = "0" + content
+    encoded_added_code = "{0:08b}".format(added_code)
+    #print (encoded_added_code)
+    content = encoded_added_code + content
     return content
 def convert_bin_to_byte(content):
-    v = int(content, 2)
     b = bytearray()
-    while v:
-        b.append(v & 0xff)
-        v >>= 8
-    return bytes(b[::-1])
-def compress(path):
+    for i in range(0, len(content), 8):
+        byte = content[i:i + 8]
+        b.append(int(byte, 2))
+    return b
+def compress(path,temp_reverse):
     tree = []
     encoded_sympol = {}
-    temp_reverse = {}
+    filename, _ = os.path.splitext(path)
     with open(path, 'r+', encoding='utf-8') as f:
         content = f.read()
         frequency = count_frequency(content)
@@ -77,37 +83,55 @@ def compress(path):
         tree = tree_maker(tree,table_frequency)
         encoded_tree = encoded(encoded_sympol,temp_reverse,tree)
         #print ("Encoded sympol: " , encoded_sympol)
+        file_dict = filename + "_dictionary" +".txt"
+        with open(file_dict,'w+') as fd:
+            fd.write(json.dumps(encoded_sympol))
         encoded_content = convert_text_to_code(encoded_sympol,content)
-        print ("Encoded content: \n", encoded_content)
+        #print ("Encoded content: \n", encoded_content)
+        #print("\n",len(encoded_content))
         new_content = prepare_to_convert_bin_to_byte(encoded_content)
         byte_content = convert_bin_to_byte(new_content)
         #print (byte_content)
-    filename, _ = os.path.splitext(path)
-    file_out = filename +"_com" + ".bin"
-    with open(file_out, 'wb') as o:
+
+    file_com = filename +"_com" + ".bin"
+    with open(file_com, 'wb') as o:
         o.write(bytes(byte_content))
     print ("Completely compressed")
-    return file_out
-def decode(new_content):
-    ...
+    return file_com
 
-def decompress(path):
-    filename, _ = os.path.splitext(path)
-    file_out = filename + "-decom" + ".txt"
+def decode(new_content):
+    temp = new_content.bin
+    added_num_info = temp[:8]
+    added_num = int(added_num_info, 2)
+    #print (added_num)
+    temp = temp[8:]
+    return temp[added_num:]
+def decompress(path,temp_reverse):
     with open (path,'rb') as f:
-        content = f.read(1)
-        print(type(content))
-        #print (content)
-        new_content = ""
-        while(len(content)>0):
-            content = ord(content)
-            bits = bin(content)[2:].rjust(8, '0')
-            new_content += bits
-            content = f.read()
-        print (new_content)
-path = "E:/Hoctrentruong/HK1nam4/Multimedia/project2/text.txt"
-a = compress(path)
-b = decompress(a)
+        content = f.read()
+        #print(type(content))
+        new_content = BitArray(bytes = content)
+        new_content = decode(new_content)
+        #print(new_content)
+        #print (len(new_content))
+        current_code = ""
+        decoded_text = ""
+        for bit in new_content:
+            current_code += bit
+            if (current_code in temp_reverse):
+                character = temp_reverse[current_code]
+                decoded_text += character
+                current_code = ""
+        #print (decoded_text)
+    filename, _ = os.path.splitext(path)
+    file_decom = filename + "-decom" + ".txt"
+    with open(file_decom, "w+", encoding='utf-8') as o:
+        o.write(decoded_text)
+    print("Completely decompressed")
+path = "E:/Hoctrentruong/HK1nam4/Multimedia/project2/ROOT/text.txt"
+temp_reverse = {}
+a = compress(path,temp_reverse)
+b = decompress(a,temp_reverse)
 #print (a)
 #content = "AAXAXSAAXAXAXACACAXACASXACASCSAXAXACACXACAXAXASADSDCCSXSXSCS"
 #          111110111001111111011101110
